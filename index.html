@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GATE 2027 | Firebase Ultimate</title>
+    <link rel="stylesheet" href="style.css">
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+</head>
+
+<body>
+    <div class="app-container">
+        <header class="top-nav">
+            <div class="logo">GATE 2027 <span>OS</span></div>
+            <div class="countdown-bar">
+                <span id="daysLeft">Days Left: --</span>
+                <span id="studyDaysLeft">Study Days: --</span>
+            </div>
+        </header>
+
+        <div style="text-align: center; margin-bottom: 20px; font-style: italic; color: var(--neon-yellow); font-size: 0.95rem; font-weight: 600;"
+            id="dailyQuote">
+            "Loading reality check..."
+        </div>
+
+        <div id="dangerZone" class="alert-banner"></div>
+
+        <section class="metrics-grid">
+            <div class="metric-card">
+                <span class="label">Projected Score</span>
+                <h2 id="baseScore">--</h2>
+                <span class="sub-text" style="color: var(--text-muted);">Consistency Base</span>
+            </div>
+            <div class="metric-card">
+                <span class="label" style="color: var(--neon-orange);">Risk Score</span>
+                <h2 id="riskScore" style="color: var(--neon-orange);">--</h2>
+                <span class="sub-text">After Penalties</span>
+            </div>
+            <div class="metric-card">
+                <span class="label">Projected AIR</span>
+                <h2 id="baseAir">--</h2>
+                <span class="sub-text" id="airTrend">--</span>
+            </div>
+            <div class="metric-card">
+                <span class="label" style="color: var(--neon-orange);">Risk AIR</span>
+                <h2 id="riskAir" style="color: var(--neon-orange);">--</h2>
+                <span class="sub-text">Actual Standing</span>
+            </div>
+            <div class="metric-card reality-card">
+                <span class="label" style="color: var(--neon-red);">If GATE Were Tomorrow</span>
+                <h2 id="realityScore">--</h2>
+                <span class="sub-text" style="color: var(--neon-red); font-weight:bold;">Expected AIR: <span
+                        id="realityAir">--</span></span>
+            </div>
+        </section>
+
+        <section class="section-box">
+            <div class="section-header">
+                <h3>Backlog & Penalty Engine</h3>
+                <span class="badge" id="streakBadge">Streak: 0 Misses</span>
+            </div>
+            <div class="backlog-grid" id="backlogGrid"></div>
+            <div
+                style="display: flex; justify-content: space-between; align-items: center; margin-top: 10px; border-top: 1px solid var(--border-dim); padding-top: 10px;">
+                <span style="font-weight: bold; color: var(--text-muted);">Total Backlog: <span id="totalBacklog"
+                        style="color: var(--text-primary);">0</span></span>
+                <span id="backlogStatus" style="font-weight: bold; font-size: 0.9rem;">--</span>
+            </div>
+        </section>
+
+        <section class="graph-section section-box">
+            <div class="section-header">
+                <h3>Performance Trajectory</h3>
+                <span class="badge" id="syncStatus">Data Status: Local</span>
+            </div>
+            <div class="canvas-container">
+                <canvas id="scoreChart"></canvas>
+            </div>
+        </section>
+
+        <section id="sundayReview" class="section-box" style="display: none; border-color: var(--neon-purple);">
+            <div class="section-header">
+                <h3 style="color: var(--neon-purple);">Weekly Review</h3>
+                <span class="badge" style="background: var(--neon-purple); color: #fff;">SUNDAY</span>
+            </div>
+            <div class="review-stats">
+                <div>
+                    <h4>Target Hit</h4>
+                    <p id="weekTarget">0/25</p>
+                </div>
+                <div>
+                    <h4>Consistency</h4>
+                    <p id="weekCons">0%</p>
+                </div>
+                <div>
+                    <h4>Gap</h4>
+                    <p id="weekGap" class="trend-down">0%</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="mission-section section-box">
+            <div class="section-header">
+                <h3>Today's Mission</h3>
+                <span class="badge" id="studyDayBadge">Study Day --</span>
+            </div>
+            <ul class="task-list" id="taskList"></ul>
+
+            <div id="customTaskBox" style="display: flex; gap: 8px; margin-top: 12px;">
+                <input type="text" id="customTaskInput" placeholder="Custom Target..."
+                    style="flex: 1; padding: 10px; border-radius: 6px; border: 1px solid var(--border-dim); background: var(--bg-main); color: #fff;">
+                <button onclick="addCustomTask()"
+                    style="padding: 10px 16px; background: var(--neon-blue); border: none; border-radius: 6px; color: #fff; font-weight: bold; cursor: pointer;">+</button>
+            </div>
+
+            <button id="lockBtn" class="primary-btn">LOCK DAY (STRICT MODE)</button>
+            <button id="resetBtn" onclick="resetToday()" class="primary-btn btn-red" style="display: none;">⚠️ UNDO
+                LOCK</button>
+        </section>
+
+        <section class="calendar-section section-box">
+            <div class="section-header">
+                <h3>Month-wise Schedule</h3>
+            </div>
+            <div id="monthWiseCalendar" class="month-container"></div>
+        </section>
+
+        <section class="forecast-section section-box">
+            <div class="section-header">
+                <h3>Consequence Forecast</h3>
+            </div>
+
+            <button onclick="recoverBacklog()" id="recoverBtn" class="primary-btn btn-orange"
+                style="display: none; margin-bottom: 20px;">
+                + CLEAR 1 BACKLOG (0.30 CREDIT)
+            </button>
+
+            <table class="brutal-table">
+                <thead>
+                    <tr>
+                        <th>If you miss...</th>
+                        <th>Score Drop</th>
+                        <th>Rank Drop</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>Today</td>
+                        <td class="text-red" id="drop1Score">--</td>
+                        <td class="text-red" id="drop1Air">--</td>
+                    </tr>
+                    <tr>
+                        <td>Next 3 Days</td>
+                        <td class="text-red" id="drop3Score">--</td>
+                        <td class="text-red" id="drop3Air">--</td>
+                    </tr>
+                </tbody>
+            </table>
+        </section>
+
+        <div id="detailModal" class="modal">
+            <div class="modal-box">
+                <div class="modal-header">
+                    <h3 id="modalDateTitle">Date</h3>
+                    <button class="close-btn" onclick="closeModalWindow()">&times;</button>
+                </div>
+                <div id="modalTargetDetails" class="modal-body"></div>
+            </div>
+        </div>
+    </div>
+    <script src="script.js"></script>
+</body>
+
+</html>
