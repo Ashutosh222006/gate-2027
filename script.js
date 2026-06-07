@@ -1,5 +1,5 @@
 // =========================================
-// GATE 2027 OS | FIREBASE + BRUTAL ENGINE (FINAL V9 - THE MASTERPIECE)
+// GATE 2027 OS | FIREBASE + BRUTAL ENGINE (FINAL V12 - SINGLE SOURCE OF TRUTH)
 // =========================================
 
 // -----------------------------------------
@@ -116,20 +116,30 @@ function runEngine() {
     if (baseScore > 75) baseScore = 75;
 
     let subBacklogs = { 'OS': 0, 'COA': 0, 'EM': 0, 'DM': 0, 'DBMS': 0, 'DLD': 0, 'Algo': 0, 'Apti': 0, 'Prac': 0 };
-    let totalBacklogs = 0;
 
-    for (let d = 1; d < currentStudyDayNum; d++) {
-        if (db.missedLog[d]) {
+    // 🔥 THE SUNDAY LOGIC FIX 🔥
+    let evaluatedDays = isTodaySunday ? currentStudyDayNum : currentStudyDayNum - 1;
+
+    for (let d = 1; d <= evaluatedDays; d++) {
+        if (db.missedLog[d] && db.dayLogs[d] !== undefined) {
             db.missedLog[d].forEach(sub => {
                 if (subBacklogs[sub] !== undefined) subBacklogs[sub]++;
                 else subBacklogs['Prac']++;
             });
         } else if (db.dayLogs[d] === undefined) {
-            totalBacklogs += 5;
+            let t1 = slot1Seq[d - 1] ? slot1Seq[d - 1].split(' ')[0] : 'Prac';
+            let t2 = slot2Seq[d - 1] ? slot2Seq[d - 1].split(' ')[0] : 'Prac';
+            let t3 = slot3Seq[d - 1] ? slot3Seq[d - 1].split(' ')[0] : 'Prac';
+
+            let missedDaySubjects = [t1, t2, t3, 'Apti', 'Prac'];
+            missedDaySubjects.forEach(sub => {
+                if (subBacklogs[sub] !== undefined) subBacklogs[sub]++;
+                else subBacklogs['Prac']++;
+            });
         }
     }
 
-    let recoveredCount = 0;
+    // Minus explicitly recovered ones
     if (db.recoveredLog) {
         for (let sub in db.recoveredLog) {
             if (subBacklogs[sub] !== undefined) {
@@ -137,13 +147,15 @@ function runEngine() {
                 if (subBacklogs[sub] < 0) subBacklogs[sub] = 0;
             }
         }
-        recoveredCount = Object.values(db.recoveredLog).reduce((a, b) => a + b, 0);
     }
 
-    let trueTotalBacklog = totalPossibleCheckpoints - db.completedCheckpoints - recoveredCount - (isTodaySunday ? 0 : 5);
-    if (trueTotalBacklog < 0) trueTotalBacklog = 0;
+    // 🔥 THE MASTER FIX: Single Source of Truth 🔥
+    // Total Backlog is now explicitly the sum of all individual subject backlogs
+    let trueTotalBacklog = 0;
+    Object.values(subBacklogs).forEach(v => {
+        trueTotalBacklog += v;
+    });
 
-    // 🔥 FIX 2: CORE SUBJECT WEIGHTS 🔥
     let subjectWeights = { 'Algo': 2, 'OS': 1.5, 'COA': 1.5, 'DBMS': 1.5, 'DM': 1, 'EM': 1, 'DLD': 1, 'Apti': 1, 'Prac': 1 };
     let subjectPenalty = 0, gridHTML = "";
     let coreSubjects = ['OS', 'COA', 'EM', 'DM', 'DBMS', 'DLD', 'Algo', 'Apti', 'Prac'];
@@ -157,13 +169,22 @@ function runEngine() {
             subjectPenalty += (subjectWeights[sub] || 1);
         }
 
-        gridHTML += `<div class="backlog-item" style="border-bottom: 2px solid ${color};">
-                        ${sub} <span style="color:${color}">${count} ${statusIcon}</span>
+        let clearBtnHTML = count > 0
+            ? `<button onclick="recoverSpecificBacklog('${sub}')" style="margin-top:6px; width:100%; padding:4px 0; font-size:0.75rem; font-weight:bold; background:rgba(59, 130, 246, 0.2); color:#fff; border:1px solid var(--neon-blue); border-radius:4px; cursor:pointer; transition:0.2s;">CLEAR 1</button>`
+            : `<div style="height: 24px; margin-top:6px;"></div>`;
+
+        gridHTML += `<div class="backlog-item" style="border-bottom: 2px solid ${color}; display:flex; flex-direction:column; justify-content:space-between;">
+                        <div>${sub} <span style="color:${color}; display:block; font-size:1.2rem; margin-top:4px;">${count} <span style="font-size:0.9rem;">${statusIcon}</span></span></div>
+                        ${clearBtnHTML}
                      </div>`;
     });
 
     document.getElementById('backlogGrid').innerHTML = gridHTML;
     document.getElementById('totalBacklog').innerText = trueTotalBacklog;
+
+    // Hide old generic button if it exists in HTML
+    let oldRecoverBtn = document.getElementById('recoverBtn');
+    if (oldRecoverBtn) oldRecoverBtn.style.display = 'none';
 
     let backlogPenalty = 0;
     if (trueTotalBacklog < 10) backlogPenalty = trueTotalBacklog * 0.25;
@@ -195,8 +216,9 @@ function runEngine() {
         dangerEl.innerText = '✅ ON TRACK: Maintain your momentum.';
     }
 
+    // STREAK PENALTY
     let missStreak = 0;
-    for (let i = currentStudyDayNum - 1; i >= 1; i--) {
+    for (let i = evaluatedDays; i >= 1; i--) {
         if (db.dayLogs[i] === undefined || db.dayLogs[i] < 5) missStreak++;
         else break;
     }
@@ -213,14 +235,10 @@ function runEngine() {
     document.getElementById('riskScore').innerText = riskScore.toFixed(1);
 
     let baseAir = calculateAIR(baseScore);
-    let riskAir = calculateAIR(riskScore);
-
-    // 🔥 FIX 3: BRUTAL AIR PENALTY 🔥
-    riskAir += Math.floor(trueTotalBacklog * 20);
+    let riskAir = calculateAIR(riskScore) + Math.floor(trueTotalBacklog * 20);
 
     document.getElementById('baseAir').innerText = baseAir > 0 ? baseAir : 1;
     document.getElementById('riskAir').innerText = riskAir > 0 ? riskAir : 1;
-
     document.getElementById('realityScore').innerText = riskScore.toFixed(1);
     document.getElementById('realityAir').innerText = riskAir > 0 ? riskAir : 1;
 
@@ -266,8 +284,6 @@ function runEngine() {
     }
     let drop1 = calcDrop(1); document.getElementById('drop1Score').innerText = `-${drop1.sDrop}`; document.getElementById('drop1Air').innerText = `+${drop1.aDrop}`;
     let drop3 = calcDrop(3); document.getElementById('drop3Score').innerText = `-${drop3.sDrop}`; document.getElementById('drop3Air').innerText = `+${drop3.aDrop}`;
-
-    document.getElementById('recoverBtn').style.display = trueTotalBacklog > 0 ? 'block' : 'none';
 
     renderTasks();
     renderMonthCalendar();
@@ -325,7 +341,6 @@ document.getElementById('lockBtn').addEventListener('click', () => {
         else missedArr.push(c.dataset.sub);
     });
 
-    // 🔥 FIX 1: LOCK CONFIRMATION 🔥
     if (!confirm(`You completed ${done}/5 checkpoints.\nLock day?`)) return;
 
     db.completedCheckpoints += done;
@@ -441,36 +456,10 @@ window.openDayModal = function (dateStr, type, sdNum) {
 window.closeModalWindow = function () { document.getElementById('detailModal').style.display = 'none'; }
 window.onclick = function (e) { if (e.target == document.getElementById('detailModal')) closeModalWindow(); }
 
-window.recoverBacklog = function () {
-    let tempBacklogs = { 'OS': 0, 'COA': 0, 'EM': 0, 'DM': 0, 'DBMS': 0, 'DLD': 0, 'Algo': 0, 'Apti': 0, 'Prac': 0 };
-    for (let d = 1; d < currentStudyDayNum; d++) {
-        if (db.missedLog[d]) {
-            db.missedLog[d].forEach(sub => { if (tempBacklogs[sub] !== undefined) tempBacklogs[sub]++; else tempBacklogs['Prac']++; });
-        }
-    }
-    if (db.recoveredLog) {
-        for (let sub in db.recoveredLog) {
-            if (tempBacklogs[sub] !== undefined) {
-                tempBacklogs[sub] -= db.recoveredLog[sub];
-                if (tempBacklogs[sub] < 0) tempBacklogs[sub] = 0;
-            }
-        }
-    }
-
-    let maxSub = null;
-    let maxVal = 0;
-    for (let sub in tempBacklogs) {
-        if (tempBacklogs[sub] > maxVal) {
-            maxVal = tempBacklogs[sub];
-            maxSub = sub;
-        }
-    }
-
-    if (maxSub) {
-        if (!db.recoveredLog) db.recoveredLog = {};
-        if (!db.recoveredLog[maxSub]) db.recoveredLog[maxSub] = 0;
-        db.recoveredLog[maxSub]++;
-    }
+window.recoverSpecificBacklog = function (sub) {
+    if (!db.recoveredLog) db.recoveredLog = {};
+    if (!db.recoveredLog[sub]) db.recoveredLog[sub] = 0;
+    db.recoveredLog[sub]++;
 
     db.extraWork = (db.extraWork || 0) + 1;
     saveData();
